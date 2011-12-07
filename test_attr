@@ -1,0 +1,102 @@
+#!/usr/bin/python
+
+# Copyright (c) 2011 Aleksander B. Demko
+# This source code is distributed under the MIT license.
+# See the accompanying file LICENSE.MIT.txt for details.
+
+import os
+import os.path
+import zipfile
+import re
+import md5
+import sys
+
+import xattr
+
+def sumfile(filename):
+  summer = md5.new()
+  try:
+    f = open(filename)
+    buf = f.read(8*1024)
+    while len(buf) > 0:
+      summer.update(buf)
+      buf = f.read(8*1024)
+    f.close()
+  except IOError:
+    return '';  #empty string on error
+  return summer.hexdigest()
+
+def do_file(filename):
+  global Errors
+  global UpdateOnly
+  #print "CHECKING ", filename
+
+  # get the attr
+  ats = xattr.get_all(filename)
+  atsmap = {}
+  for k,v in ats:
+    atsmap[k] = v
+  #print atsmap["user.md5_sum"]
+
+  # stat the file
+  info = os.stat(filename)
+  info_time = int(info.st_mtime)
+  info_size = int(info.st_size)
+
+  try:
+    if int(atsmap["user.last_time"]) == info_time and int(atsmap["user.last_size"]) == info_size:
+    #if int(atsmap["user.last_size"]) == info_size:  # for testing, dont compare the mtime
+      if UpdateOnly:
+        return
+      print "verifying:", filename
+      # do check sum here
+      last_md5sum = sumfile(filename)
+      if last_md5sum != atsmap["user.last_md5sum"]:
+        s = filename + " wanted:" + atsmap["user.last_md5sum"] + " got:" + last_md5sum
+        Errors.append(s)
+      return
+  except:
+    1
+  print "UPDATING:", filename
+  last_md5sum = sumfile(filename)
+  if last_md5sum == '':
+    Errors.append(filename + " - failed to compute md5sum")
+    return
+  xattr.set(filename, "user.last_time", str(info_time))
+  xattr.set(filename, "user.last_size", str(info_size))
+  xattr.set(filename, "user.last_md5sum", last_md5sum)
+
+  #xattr.set(filename, "user.md5_sum", "a sum")
+
+if len(sys.argv) <= 1:
+  print "test_attr [-u] dir_to_process"
+  print
+  print " -u  only add new entries, dont get existing ones"
+  print "     (useful mostly for debugging)"
+  print
+  print " notes: 1) you must be root 2) mount the ext-fs with user_xattr"
+  print
+  print " useful commands:"
+  print "   getfattr -d filename"
+  print "   setfattr -n user.key -v value filename"
+  print
+  sys.exit(1)
+
+dir = sys.argv[1]
+Errors = []
+UpdateOnly = 0
+
+if dir == "-u":
+  UpdateOnly = 1
+  dir = sys.argv[2]
+
+for root, dirs, files in os.walk(dir):
+  for f in files:
+    filename = root + "/" + f
+    if os.path.isfile(filename) and not os.path.islink(filename):
+      do_file(filename)
+
+print len(Errors), ' xattr-m5sum errors found.'
+for e in Errors:
+  print 'ERROR_IN ', e
+

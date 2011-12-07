@@ -1,0 +1,127 @@
+#!/usr/bin/python
+
+# Copyright (c) 2011 Aleksander B. Demko
+# This source code is distributed under the MIT license.
+# See the accompanying file LICENSE.MIT.txt for details.
+
+#
+# rotating rsync, version 2.0 driver
+#
+#
+# ademko 2010-01-14
+#
+
+#
+# future idea:
+#
+
+import time
+import os
+import sys
+
+def make_week_schedule(num_snaps):
+  assert(num_snaps<=7)
+  days_per_slot = 7 / num_snaps
+  r = []
+  for x in range(0,7):
+    r.append(0)
+  index = 0
+  for slot in range(0, num_snaps):
+    for n in range(0, days_per_slot):
+      r[index] = slot
+      index += 1
+  return r
+
+def make_month_schedule(num_snaps):
+  assert(num_snaps<=28)
+  days_per_slot = 28 / num_snaps
+  r = []
+  for x in range(0,31):
+    r.append(0)
+  index = 0
+  for slot in range(0, num_snaps):
+    for n in range(0, days_per_slot):
+      r[index] = slot
+      index += 1
+  return r
+
+if len(sys.argv) < 5:
+  print "%s freq type src dest [ssh_options]" % sys.argv[0]
+  print ""
+  print "  freq   the number of different backs to do over the period"
+  print "         for example, 9 permonth will spread 9 different backups"
+  print "         over a month"
+  print "  type   the type of backup, either \"perweek\" or \"permonth\""
+  print "  src    the src, either a directory or user@host:dir format"
+  print "  dest   the destination directory. /num will be appended to this"
+  print "  ssh_options"
+  print "         additional options, for example:"
+  print "             \"-e 'ssh -i /home/.ssh/somekey'\""
+  print ""
+  sys.exit(1)
+
+num_snaps = int(sys.argv[1])
+src_dir = sys.argv[3]
+dest_dir = sys.argv[4]
+bonus_command = ''
+if len(sys.argv) >= 6:
+  bonus_command = sys.argv[5]
+assert(num_snaps > 1)
+if sys.argv[2] == "perweek":
+  schedule = make_week_schedule(num_snaps)
+  today_index = time.localtime()[6] # will be 0 to 6
+elif sys.argv[2] == "permonth":
+  schedule = make_month_schedule(num_snaps)
+  today_index = time.localtime()[2]-1 # make it 0..30
+else:
+  assert(0)
+
+today_snap = schedule[today_index]
+prev_snap = today_snap - 1
+if prev_snap < 0:
+  prev_snap = num_snaps-1
+print "today_index = ", today_index, " schedule =", schedule
+print "today_snap = ", today_snap, " prev_snap = ", prev_snap
+
+assert(today_snap != prev_snap)
+assert(today_snap >= 0)
+assert(today_snap < num_snaps)
+assert(prev_snap >= 0)
+assert(prev_snap < num_snaps)
+
+  # add a -v for testing
+command = "rsync -a --delete %s %s --exclude=.gvfs --exclude=/heap --one-file-system --link-dest=%s/%d/ %s/%d/" % (bonus_command,src_dir,dest_dir,prev_snap,dest_dir,today_snap)
+print "running the following command in 10 seconds:"
+print command
+time.sleep(10)
+os.system(command)
+
+#if prevnum<0:
+#  prevnum = last_slot
+### the end
+sys.exit(0)
+
+schedule = [0, 1,1,1, 2,2,2, 3,3,3, 4,4,4, 5,5,5, 6,6,6, 7,7,7, 8,8,8, 9,9,9, 0,0,0]
+last_slot = 9
+
+# get the current day of the month
+mday = time.localtime()[2]
+mday = mday-1	# make it from 0..30
+
+destnum = schedule[mday]
+prevnum = destnum-1
+if prevnum<0:
+  prevnum = last_slot
+
+print "mday(0-based) = ", mday
+print "destnum = ", destnum, " prevnum = ", prevnum
+print "starting in 10 seconds..."
+
+assert(prevnum != destnum)
+assert(prevnum >= 0)
+assert(prevnum <= last_slot)
+assert(destnum >= 0)
+assert(destnum <= last_slot)
+
+time.sleep(10)
+
