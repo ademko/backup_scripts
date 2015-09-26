@@ -4,6 +4,11 @@
 # This source code is distributed under the MIT license.
 # See the accompanying file LICENSE.MIT.txt for details.
 
+# this requires the following to be installed under ubuntu:
+#       python-pyxattr
+# you must also add the following parameter to your mount options
+#       user_xattr
+
 import os
 import os.path
 import zipfile
@@ -29,6 +34,8 @@ def sumfile(filename):
 def do_file(filename):
   global Errors
   global UpdateOnly
+  global numverified
+  global numupdated
   #print "CHECKING ", filename
 
   # get the attr
@@ -48,6 +55,7 @@ def do_file(filename):
     #if int(atsmap["user.last_size"]) == info_size:  # for testing, dont compare the mtime
       if UpdateOnly:
         return
+      numverified = numverified + 1
       print "verifying:", filename
       # do check sum here
       last_md5sum = sumfile(filename)
@@ -57,6 +65,7 @@ def do_file(filename):
       return
   except:
     1
+  numupdated = numupdated + 1
   print "UPDATING:", filename
   last_md5sum = sumfile(filename)
   if last_md5sum == '':
@@ -82,21 +91,24 @@ if len(sys.argv) <= 1:
   print
   sys.exit(1)
 
-dir = sys.argv[1]
 Errors = []
+numverified = 0
+numupdated = 0
 UpdateOnly = 0
 
-if dir == "-u":
-  UpdateOnly = 1
-  dir = sys.argv[2]
+for curdir in sys.argv[1:]:
+  if curdir == "-u":
+    UpdateOnly = 1
+  elif os.path.isfile(curdir):
+    do_file(curdir)
+  else:
+    for root, dirs, files in os.walk(curdir):
+      for f in files:
+        filename = root + "/" + f
+        if os.path.isfile(filename) and not os.path.islink(filename):
+          do_file(filename)
 
-for root, dirs, files in os.walk(dir):
-  for f in files:
-    filename = root + "/" + f
-    if os.path.isfile(filename) and not os.path.islink(filename):
-      do_file(filename)
-
-print len(Errors), ' xattr-m5sum errors found.'
+print "%d xttr-md5sum errors, %d verified, %d updated" % (len(Errors), numverified, numupdated)
 for e in Errors:
   print 'ERROR_IN ', e
 

@@ -7,42 +7,26 @@
 import os
 import os.path
 import zipfile
+import sys
 
-print 'testing all zip files in . (recursivly)'
+dir = '.'
 
-def add_zip(zipname):
-  global ZipFiles
-  ZipFiles[zipname] = 1
+if len(sys.argv) > 1:
+  dir = sys.argv[1]
+  os.chdir(dir)
 
-def check_zip_old(zipname):
+print 'testing all compressed archives files in %s (recursivly)' % dir
+
+def check_prog(cmdname, args, filename):
   global Errors
-  print 'checking ', zipname
-  z = zipfile.ZipFile(zipname, 'r')
-  if z.testzip() != None:
-    Errors.append(zipname)
-    print 'BAD -- ', zipname
-
-def check_zip(zipname):
-  global Errors
-  print 'checking ', zipname
+  print cmdname, 'checking', filename
   id = os.fork()
   if id == 0:
-    os.execlp('unzip', '-q', '-q', '-q', '-t', zipname)
+    os.execvp(cmdname, args)
   (pid, stat) = os.wait()
   if stat != 0:
-    Errors.append(zipname)
-    print 'BAD -- ', zipname
-
-def check_gz(gzname):
-  global Errors
-  print 'checking ', gzname
-  id = os.fork()
-  if id == 0:
-    os.execlp('gzip', '-q', '-t', gzname)
-  (pid, stat) = os.wait()
-  if stat != 0:
-    Errors.append(gzname)
-    print 'BAD -- ', gzname
+    Errors.append(filename)
+    print 'BAD -- ', filename
 
 def do_dir(dirname):
   files = os.listdir(dirname)
@@ -57,24 +41,28 @@ def do_dir(dirname):
         add_zip(fullf)
 
 
-ZipFiles = {}
 Errors = []
-#do_dir('.')
-for root, dirs, files in os.walk('.'):
+for root, dirs, files in os.walk(dir):
   for f in files:
-    (dummy, ext) = os.path.splitext(f)
+    (justname, ext) = os.path.splitext(f)
     lower = ext.lower()
-    if lower == '.gz' or lower == '.tgz':
-      check_gz(root + '/' + f)
+    noext = root + '/' + justname
+    fullname = root + '/' + f
+    if lower == '.bz2':
+      check_prog('pbzip2', ['pbzip2', '-q', '-t', fullname], fullname)
+    elif lower == '.rar':
+      check_prog('rar', ['rar', 't', '-inul', fullname], fullname)
+    elif lower == '.par2':
+      check_prog('par2', ['par2', 'v', '-q', '-q', fullname, noext], fullname)
+    elif lower == '.xz':
+      check_prog('xz', ['xz', '-q', '-t', fullname], fullname)
+    elif lower == '.gz' or lower == '.tgz':
+      check_prog('gzip', ['gzip', '-q', '-t', fullname], fullname)
     elif lower == '.zip':
-      check_zip(root + '/' + f)
-      #add_zip(root + '/' + f)
+      check_prog('unzip', ['unzip', '-q', '-q', '-q', '-t', fullname], fullname)
+    elif lower == '.7z':
+      check_prog('7z', ['7z', 't', fullname], fullname)
   #print root, '::', dirs, '::', files
-
-#print len(ZipFiles), ' zip files found -- checking them all'
-
-for f in ZipFiles:
-  check_zip(f)
 
 print len(Errors), ' zip errors found.'
 for e in Errors:
