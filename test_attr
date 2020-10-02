@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-# Copyright (c) 2011 Aleksander B. Demko
+# Copyright (c) 2020 Aleksander B. Demko
 # This source code is distributed under the MIT license.
 # See the accompanying file LICENSE.MIT.txt for details.
 
 # this requires the following to be installed under ubuntu:
-#       python-pyxattr
+#       python3-pyxattr
 # you must also add the following parameter to your mount options
 #       user_xattr
 
@@ -13,83 +13,96 @@ import os
 import os.path
 import zipfile
 import re
-import md5
+import hashlib
 import sys
 
 import xattr
 
+# python3, filenames and unicode is currently broken
+# This is a work around the fact that the default print-output streams throw exceptions
+# on surrogateescape-encoded strings that the file api produced.
+# This triggers when on certain non-utf8 (but still valid) file names in Linux
+def filename_to_ui(value):
+    if isinstance(value, bytes):
+        value = value.decode(sys.getfilesystemencoding(), 'replace')
+    else:
+        value = value.encode('utf-8', 'surrogateescape').decode('utf-8', 'replace')
+    return value
+
+# returns '' on all IO errors
 def sumfile(filename):
-  summer = md5.new()
-  try:
-    f = open(filename)
+    summer = hashlib.md5()
+
+    f = open(filename, "rb")
     buf = f.read(8*1024)
     while len(buf) > 0:
-      summer.update(buf)
-      buf = f.read(8*1024)
+        summer.update(buf)
+        buf = f.read(8*1024)
     f.close()
-  except IOError:
-    return '';  #empty string on error
-  return summer.hexdigest()
+
+    return summer.hexdigest()
 
 def do_file(filename):
-  global Errors
-  global UpdateOnly
-  global numverified
-  global numupdated
-  #print "CHECKING ", filename
+    global Errors
+    global UpdateOnly
+    global numverified
+    global numupdated
 
-  # get the attr
-  ats = xattr.get_all(filename)
-  atsmap = {}
-  for k,v in ats:
-    atsmap[k] = v
-  #print atsmap["user.md5_sum"]
+    # get the attr
+    ats = xattr.get_all(filename)
+    atsmap = {}
+    for k, v in ats:
+        atsmap[k] = v
 
-  # stat the file
-  info = os.stat(filename)
-  info_time = int(info.st_mtime)
-  info_size = int(info.st_size)
+    # stat the file
+    info = os.stat(filename)
+    info_time = int(info.st_mtime)
+    info_size = int(info.st_size)
 
-  try:
-    if int(atsmap["user.last_time"]) == info_time and int(atsmap["user.last_size"]) == info_size:
-    #if int(atsmap["user.last_size"]) == info_size:  # for testing, dont compare the mtime
-      if UpdateOnly:
+    try:
+        # its useful to remove the time test in the if to check for binary detection functionality
+        if int(atsmap[b"user.last_size"]) == info_size and int(atsmap[b"user.last_time"]) == info_time:
+            if UpdateOnly:
+                return
+            numverified = numverified + 1
+            print("verifying:", filename_to_ui(filename))
+            # do check sum here
+            attr_md5sum = str(atsmap[b"user.last_md5sum"], 'ascii')
+            try:
+                last_md5sum = sumfile(filename)
+
+                if last_md5sum != attr_md5sum:
+                    s = "%s wanted: %s got: %s" % (filename_to_ui(filename), attr_md5sum, last_md5sum)
+                    Errors.append(s)
+            except IOError as e:
+                Errors.append("%s failed to compute md5sum: %s" % (filename_to_ui(filename), e))
+            return
+    except Exception as e:
+        pass
+    numupdated = numupdated + 1
+    print("UPDATING:", filename_to_ui(filename))
+    try:
+        last_md5sum = sumfile(filename)
+    except IOError as e:
+        Errors.append("%s failed to compute md5sum: %s" % (filename_to_ui(filename), e))
         return
-      numverified = numverified + 1
-      print "verifying:", filename
-      # do check sum here
-      last_md5sum = sumfile(filename)
-      if last_md5sum != atsmap["user.last_md5sum"]:
-        s = filename + " wanted:" + atsmap["user.last_md5sum"] + " got:" + last_md5sum
-        Errors.append(s)
-      return
-  except:
-    1
-  numupdated = numupdated + 1
-  print "UPDATING:", filename
-  last_md5sum = sumfile(filename)
-  if last_md5sum == '':
-    Errors.append(filename + " - failed to compute md5sum")
-    return
-  xattr.set(filename, "user.last_time", str(info_time))
-  xattr.set(filename, "user.last_size", str(info_size))
-  xattr.set(filename, "user.last_md5sum", last_md5sum)
-
-  #xattr.set(filename, "user.md5_sum", "a sum")
+    xattr.set(filename, "user.last_time", str(info_time))
+    xattr.set(filename, "user.last_size", str(info_size))
+    xattr.set(filename, "user.last_md5sum", bytes(last_md5sum, 'ascii'))
 
 if len(sys.argv) <= 1:
-  print "test_attr [-u] dir_to_process"
-  print
-  print " -u  only add new entries, dont get existing ones"
-  print "     (useful mostly for debugging)"
-  print
-  print " notes: 1) you must be root 2) mount the ext-fs with user_xattr"
-  print
-  print " useful commands:"
-  print "   getfattr -d filename"
-  print "   setfattr -n user.key -v value filename"
-  print
-  sys.exit(1)
+    print("test_attr [-u] dir_to_process")
+    print()
+    print(" -u  only add new entries, dont m5sum-check the existing ones")
+    print("     (useful mostly for debugging)")
+    print()
+    print(" notes: 1) you must be root 2) mount the ext-fs with user_xattr")
+    print()
+    print(" useful commands:")
+    print("   getfattr -d filename")
+    print("   setfattr -n user.key -v value filename")
+    print()
+    sys.exit(1)
 
 Errors = []
 numverified = 0
@@ -97,18 +110,18 @@ numupdated = 0
 UpdateOnly = 0
 
 for curdir in sys.argv[1:]:
-  if curdir == "-u":
-    UpdateOnly = 1
-  elif os.path.isfile(curdir):
-    do_file(curdir)
-  else:
-    for root, dirs, files in os.walk(curdir):
-      for f in files:
-        filename = root + "/" + f
-        if os.path.isfile(filename) and not os.path.islink(filename):
-          do_file(filename)
+    if curdir == "-u":
+        UpdateOnly = 1
+    elif os.path.isfile(curdir):
+        do_file(curdir)
+    else:
+        for root, dirs, files in os.walk(curdir):
+            for f in files:
+                filename = root + "/" + f
+                if os.path.isfile(filename) and not os.path.islink(filename):
+                    do_file(filename)
 
-print "%d xttr-md5sum errors, %d verified, %d updated" % (len(Errors), numverified, numupdated)
+print("%d xattr-md5sum errors, %d verified, %d updated" %
+      (len(Errors), numverified, numupdated))
 for e in Errors:
-  print 'ERROR_IN ', e
-
+    print('ERROR_IN ', e)
