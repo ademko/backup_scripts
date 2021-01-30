@@ -1,0 +1,96 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2021 Aleksander B. Demko
+# This source code is distributed under the MIT license.
+# See the accompanying file LICENSE.MIT.txt for details.
+
+import os
+import os.path
+import zipfile
+import re
+import hashlib
+
+# Allows one to do rm and mv operations on the files within a MD5SUMS file.
+
+print('#checking MD5SUMS for new files in .')
+
+
+def sumfile(filename):
+    summer = hashlib.md5()
+    f = open(filename)
+    buf = f.read(8*1024)
+    while len(buf) > 0:
+        summer.update(buf)
+        buf = f.read(8*1024)
+    f.close()
+    return summer.hexdigest()
+
+
+def open_mfile(mname):
+    print('#checking ', mname)
+    ret = []
+    (mdir, mjustfilename) = os.path.split(mname)
+    f = open(mname)
+    line = f.readline()
+    while line != "":
+        res = Exp.match(line)
+        if res != None:
+            sum = res.group(1)
+            filename = res.group(2)
+            ret.append(filename)
+        line = f.readline()
+    f.close()
+    return ret
+
+
+def enum_dir(dirname):
+    return os.listdir(dirname)
+
+
+def do_dir(dirname):
+    retlist = []
+    files = sorted(os.listdir(dirname))
+    for f in files:
+        fullf = dirname + '/' + f
+        if os.path.isdir(fullf):
+            sub = do_dir(fullf)  # recurse on dirs
+            for s in sub:
+                retlist.append(s)
+        else:
+            # dont do empty files
+            if os.stat(fullf).st_size > 0:
+                retlist.append(fullf)
+    return retlist
+
+
+def filter_dot_prefix(alist):
+    retlist = []
+    for a in alist:
+        if a[:2] == './':
+            retlist.append(a[2:])
+        else:
+            retlist.append(a)
+    return retlist
+
+
+def enum_dir_recurse(dirname):
+    return do_dir(dirname)
+
+
+Exp = re.compile('^([a-fA-F0-9]*) +(\S[^\\n]*)$')
+
+mdfiles = open_mfile('MD5SUMS')
+mdfiles = filter_dot_prefix(mdfiles)
+actualfiles = enum_dir_recurse('.')
+actualfiles = filter_dot_prefix(actualfiles)
+
+mdfiles_map = {}
+
+print('#run the following...')
+# conver the mdfiles into a hash
+for mdfile_name in mdfiles:
+    mdfiles_map[mdfile_name] = 1
+for actual_name in actualfiles:
+    if (not actual_name in mdfiles_map) and actual_name != 'MD5SUMS' and os.path.isfile(actual_name):
+        print("md5sum \"%s\" >> MD5SUMS" % actual_name)
+

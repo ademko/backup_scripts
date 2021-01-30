@@ -1,0 +1,83 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2021 Aleksander B. Demko
+# This source code is distributed under the MIT license.
+# See the accompanying file LICENSE.MIT.txt for details.
+
+import os
+import os.path
+import zipfile
+import re
+import sys
+
+ok = 0
+
+if len(sys.argv) < 3:
+    print("%s rm filename" % sys.argv[0])
+    print()
+    print("  or")
+    print()
+    print("%s mv filename new_filename" % sys.argv[0])
+    print()
+    sys.exit(0)
+
+command = sys.argv[1]
+
+if command == "rm":
+    filename = sys.argv[2]
+elif command == "mv":
+    if len(sys.argv) < 4:
+        print("need two filenames for mv operation")
+        sys.exit(0)
+    filename = sys.argv[2]
+    new_filename = sys.argv[3]
+else:
+    print("unkown command:", command)
+    sys.exit(0)
+
+if command == "rm":
+    print("#performing rm on", filename)
+    print("rm ", filename)
+else:
+    print("#performing mv on", filename, new_filename)
+    print("mv ", filename, new_filename)
+
+# open MD5SUMS
+
+Exp = re.compile('^([a-fA-F0-9]*) +(\S[^\\n]*)$')
+
+matches = 0
+contents = []
+
+# iterate through the MD5SUMS
+f = open('MD5SUMS')
+line = f.readline()
+while line != "":
+    res = Exp.match(line)
+    if res == None:
+        contents.append(line)
+        print(line)
+    else:
+        in_sum = res.group(1)
+        in_filename = res.group(2)
+        if in_filename == filename:
+            matches = matches + 1
+            if command == "mv":
+                contents.append("%s  %s\n" % (in_sum, new_filename))
+            # else its a rm, and we WONT echo this line
+        else:
+            contents.append(line)
+    line = f.readline()
+f.close()
+
+if matches == 0:
+    print("no matches - no changes made")
+#  sys.exit()
+
+outfile = open("MD5SUMS", "w+")
+for l in contents:
+    outfile.write(l)
+outfile.close()
+
+print("#%s matches; wrote %d lines to new MD5SUMS" % (matches, len(contents)))
+

@@ -35,3 +35,23 @@ test_attr – Tries to hash ALL the files on the specified file system.
 I do `git fsck`. For my picture collection, I run various checks with my
 "hydra" software.
 
+
+MD5SUMS Utilities
+=================
+
+Three other scripts help with keeping your MD5SUMS file up to date.
+
+md5_update - Finds all the files that should be in the MD5SUMS and emits
+             the commands that you need to run to stdout. It doesn’t
+             actually run the commands - you need to do that via cut and
+             paste or by piping the output to a shell.
+
+md5_edit - Allows you to add or rename entries in a MD5SUMS easily.
+           It is used by the md5_trim
+
+md5_trim - Finds all the files that have been deleted yet still exist
+           in the MD5SUMS. It emits the md5_edit commands needed to update
+           the file to stdout. It doesn’t actually run the commands - you
+           need to do that via cut and paste or by piping the output
+           to a shell.
+

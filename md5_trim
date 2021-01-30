@@ -1,0 +1,47 @@
+#!/usr/bin/env python3
+
+# Copyright (c) 2021 Aleksander B. Demko
+# This source code is distributed under the MIT license.
+# See the accompanying file LICENSE.MIT.txt for details.
+
+import os
+import os.path
+import zipfile
+import re
+
+print('#checking MD5SUMS for files that no longer exist in .')
+
+
+def open_mfile(mname):
+    ret = []
+    (mdir, mjustfilename) = os.path.split(mname)
+    f = open(mname)
+    line = f.readline()
+    while line != "":
+        res = Exp.match(line)
+        if res != None:
+            sum = res.group(1)
+            filename = res.group(2)
+            ret.append(filename)
+        line = f.readline()
+    f.close()
+    return ret
+
+
+Exp = re.compile('^([a-fA-F0-9]*) +(\S[^\\n]*)$')
+
+mdfiles = open_mfile('MD5SUMS')
+
+missing_files = {}
+
+for mdfile_name in mdfiles:
+    if not os.path.isfile(mdfile_name):
+        missing_files[mdfile_name] = 1
+
+if missing_files == {}:
+    print("no missing files found")
+else:
+    print('#run the following...')
+    for k in missing_files.keys():
+        print("md5_edit rm \"%s\"" % k)
+
