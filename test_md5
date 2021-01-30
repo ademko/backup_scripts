@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-# Copyright (c) 2011 Aleksander B. Demko
+# Copyright (c) 2021 Aleksander B. Demko
 # This source code is distributed under the MIT license.
 # See the accompanying file LICENSE.MIT.txt for details.
 
@@ -8,63 +8,62 @@ import os
 import os.path
 import zipfile
 import re
-import md5
+import hashlib
 import sys
 
 dir = '.'
 
 if len(sys.argv) > 1:
-  dir = sys.argv[1]
-  os.chdir(dir)
+    dir = sys.argv[1]
+    os.chdir(dir)
 
-print 'testing all MD5SUMs files in %s (recursivly)' % dir
+print('testing all MD5SUMs files in %s (recursively)' % dir)
+
 
 def sumfile(filename):
-  summer = md5.new()
-  try:
-    f = open(filename)
-    buf = f.read(8*1024)
-    while len(buf) > 0:
-      summer.update(buf)
-      buf = f.read(8*1024)
-    f.close()
-  except IOError:
-    return 'IOErrorHash';
-  return summer.hexdigest()
+    summer = hashlib.md5()
+    try:
+        f = open(filename, "rb")
+        buf = f.read(8*1024)
+        while len(buf) > 0:
+            summer.update(buf)
+            buf = f.read(8*1024)
+        f.close()
+    except IOError:
+        return 'IOErrorHash'
+    return summer.hexdigest()
+
 
 def check_mfile(mname):
-  global Errors
-  print 'checking ', mname
-  (mdir, mjustfilename) = os.path.split(mname)
-  f = open(mname)
-  line = f.readline()
-  while line != "":
-    #print line
-    res = Exp.match(line)
-    if res != None:
-      sum = res.group(1)
-      filename = res.group(2)
-      #print 'a match: ', res.group(1), res.group(2)
-      print ' sub-checking ',filename, ' with-in ', mdir
-      newsum = sumfile(mdir + '/' + filename)
-      if newsum != sum:
-        Errors.append(mname + ' ' + filename)
-        print 'BAD -- ', mname
+    global Errors
+    print('checking', mname)
+    (mdir, mjustfilename) = os.path.split(mname)
+    f = open(mname)
     line = f.readline()
-  f.close()
+    while line != "":
+        res = Exp.match(line)
+        if res != None:
+            sum = res.group(1)
+            filename = res.group(2)
+            print(' sub-checking', filename, 'within', mdir)
+            newsum = sumfile(mdir + '/' + filename)
+            if newsum != sum:
+                Errors.append(mname + ' ' + filename)
+                print('BAD ', mname, ' ', filename)
+        line = f.readline()
+    f.close()
+
 
 Errors = []
 Exp = re.compile('^([a-fA-F0-9]*) +(\S[^\\n]*)$')
 for root, dirs, files in os.walk('.'):
-  for f in files:
-    (dummy, filename) = os.path.split(f)
-    lower = filename.lower()
-    if lower == 'md5sums':
-      check_mfile(root + '/' + f)
-  #print root, '::', dirs, '::', files
+    for f in files:
+        (dummy, filename) = os.path.split(f)
+        lower = filename.lower()
+        if lower == 'md5sums':
+            check_mfile(root + '/' + f)
 
 
-print len(Errors), ' m5sum errors found.'
+print(len(Errors), 'm5sum errors found.')
 for e in Errors:
-  print 'ERROR_IN ', e
-
+    print('ERROR_IN ', e)

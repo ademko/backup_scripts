@@ -1,6 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/env python3
 
-# Copyright (c) 2011 Aleksander B. Demko
+# Copyright (c) 2021 Aleksander B. Demko
 # This source code is distributed under the MIT license.
 # See the accompanying file LICENSE.MIT.txt for details.
 
@@ -12,59 +12,61 @@ import sys
 dir = '.'
 
 if len(sys.argv) > 1:
-  dir = sys.argv[1]
-  os.chdir(dir)
+    dir = sys.argv[1]
+    os.chdir(dir)
 
-print 'testing all compressed archives files in %s (recursivly)' % dir
+print('testing all compressed archives files in %s (recursively)' % dir)
+
 
 def check_prog(cmdname, args, filename):
-  global Errors
-  print cmdname, 'checking', filename
-  id = os.fork()
-  if id == 0:
-    os.execvp(cmdname, args)
-  (pid, stat) = os.wait()
-  if stat != 0:
-    Errors.append(filename)
-    print 'BAD -- ', filename
+    global Errors
+    print(cmdname, 'checking', filename)
+    id = os.fork()
+    if id == 0:
+        os.execvp(cmdname, args)
+    (pid, stat) = os.wait()
+    if stat != 0:
+        Errors.append(filename)
+        print('BAD -- ', filename)
+
 
 def do_dir(dirname):
-  files = os.listdir(dirname)
-  for f in files:
-    fullf = dirname + '/' + f
-    if os.path.isdir(fullf):
-      do_dir(fullf) # recurse on dirs
-    else:
-      (dummy, ext) = os.path.splitext(f)
-      lower = ext.lower()
-      if lower == '.zip':
-        add_zip(fullf)
+    files = os.listdir(dirname)
+    for f in files:
+        fullf = dirname + '/' + f
+        if os.path.isdir(fullf):
+            do_dir(fullf)  # recurse on dirs
+        else:
+            (dummy, ext) = os.path.splitext(f)
+            lower = ext.lower()
+            if lower == '.zip':
+                add_zip(fullf)
 
 
 Errors = []
 for root, dirs, files in os.walk(dir):
-  for f in files:
-    (justname, ext) = os.path.splitext(f)
-    lower = ext.lower()
-    noext = root + '/' + justname
-    fullname = root + '/' + f
-    if lower == '.bz2':
-      check_prog('pbzip2', ['pbzip2', '-q', '-t', fullname], fullname)
-    elif lower == '.rar':
-      check_prog('rar', ['rar', 't', '-inul', fullname], fullname)
-    elif lower == '.par2':
-      check_prog('par2', ['par2', 'v', '-q', '-q', fullname, noext], fullname)
-    elif lower == '.xz':
-      check_prog('xz', ['xz', '-q', '-t', fullname], fullname)
-    elif lower == '.gz' or lower == '.tgz':
-      check_prog('gzip', ['gzip', '-q', '-t', fullname], fullname)
-    elif lower == '.zip':
-      check_prog('unzip', ['unzip', '-q', '-q', '-q', '-t', fullname], fullname)
-    elif lower == '.7z':
-      check_prog('7z', ['7z', 't', fullname], fullname)
-  #print root, '::', dirs, '::', files
+    for f in files:
+        (justname, ext) = os.path.splitext(f)
+        lower = ext.lower()
+        noext = root + '/' + justname
+        fullname = root + '/' + f
+        if lower == '.bz2':
+            check_prog('pbzip2', ['pbzip2', '-q', '-t', fullname], fullname)
+        elif lower == '.rar':
+            check_prog('rar', ['rar', 't', '-inul', fullname], fullname)
+        elif lower == '.par2':
+            check_prog('par2', ['par2', 'v', '-q',
+                                '-q', fullname, noext], fullname)
+        elif lower == '.xz':
+            check_prog('xz', ['xz', '-q', '-t', fullname], fullname)
+        elif lower == '.gz' or lower == '.tgz':
+            check_prog('gzip', ['gzip', '-q', '-t', fullname], fullname)
+        elif lower == '.zip':
+            check_prog('unzip', ['unzip', '-q', '-q',
+                                 '-q', '-t', fullname], fullname)
+        elif lower == '.7z':
+            check_prog('7z', ['7z', 't', fullname], fullname)
 
-print len(Errors), ' zip errors found.'
+print(len(Errors), 'compressed file errors found.')
 for e in Errors:
-  print 'ERROR_IN ', e
-
+    print('ERROR_IN ', e)
