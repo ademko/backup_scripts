@@ -9,6 +9,7 @@ import os.path
 import zipfile
 import re
 import hashlib
+import shlex
 
 # Allows one to do rm and mv operations on the files within a MD5SUMS file.
 
@@ -76,6 +77,8 @@ def filter_dot_prefix(alist):
 def enum_dir_recurse(dirname):
     return do_dir(dirname)
 
+def escape_for_shell(rawstring):
+    return shlex.quote(rawstring)
 
 Exp = re.compile('^([a-fA-F0-9]*) +(\S[^\\n]*)$')
 
@@ -92,5 +95,5 @@ for mdfile_name in mdfiles:
     mdfiles_map[mdfile_name] = 1
 for actual_name in actualfiles:
     if (not actual_name in mdfiles_map) and actual_name != 'MD5SUMS' and os.path.isfile(actual_name):
-        print("md5sum \"%s\" >> MD5SUMS" % actual_name)
+        print("md5sum %s >> MD5SUMS" % escape_for_shell(actual_name))
 

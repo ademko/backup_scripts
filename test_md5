@@ -45,8 +45,12 @@ def check_mfile(mname):
         if res != None:
             sum = res.group(1)
             filename = res.group(2)
-            print(' sub-checking', filename, 'within', mdir)
-            newsum = sumfile(mdir + '/' + filename)
+            if filename[0:1] == "/":
+                print(' sub-checking', filename, 'within /')
+                newsum = sumfile(filename)
+            else:
+                print(' sub-checking', filename, 'within', mdir)
+                newsum = sumfile(mdir + '/' + filename)
             if newsum != sum:
                 Errors.append(mname + ' ' + filename)
                 print('BAD ', mname, ' ', filename)
