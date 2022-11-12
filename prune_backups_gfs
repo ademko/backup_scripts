@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+
+# ./prune_backups_gfs world*.gz
+
+# Implements a simple grandfather-father-son back up system.
+# Given a set of files, it will emit a list of files that should be pruned.
+#
+# In detail:
+#   - keep all weekly backups for the last month
+#   - keep all monthly backups for the last year
+#   - one for every past year beyond that (archival)
+
+import sys
+import os
+import math
+
+class Entry:
+    def __init__(self,filename):
+        self.filename = filename
+        self.st_mtime = os.stat(file).st_mtime
+        # normalize so that the latest is 0
+        self.age_mtime = 0
+        self.delete_this = False
+
+    def __str__(self):
+        return f"entry {self.filename} mtime_sec={self.st_mtime} age_days={self.age_days()} delete={self.delete_this}"
+
+    def age_days(self):
+        return round(self.age_mtime/(60*60*24))
+
+# this is actually an infinite series, we can use a python generator if we want to be cute
+periods = [7, 7, 7, 7, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 336, 336, 336, 336, 336, 336]
+files = sys.argv[1:]
+
+if len(files) < 1:
+    print("ERROR: You need to provide at least 1 file.")
+    sys.exit(1)
+
+entries = []
+
+for file in files:
+    entries.append(Entry(file))
+
+# sort entries by mtime
+entries.sort(key=lambda e: e.st_mtime, reverse=True)
+
+# assign age_mtime(s)
+base_time = entries[0].st_mtime
+for index in range(len(entries)):
+    entries[index].age_mtime = base_time - entries[index].st_mtime
+
+print("entries")
+for entry in entries:
+    print(entry)
+
+period_index = 1
+index = 0
+while index < len(entries):
+    this_age = entries[index].age_days()
+    # find the oldest entry that's still within this period's range
+    #print(f"doing index {index} age_days {entries[index].age_days()}")
+    oldest_index = None
+
+    for one_past_oldest_index in range(index+1, len(entries)):
+        #print(f"    comparing index {one_past_oldest_index} delta-age ", entries[one_past_oldest_index].age_days()-this_age, " period", periods[period_index])
+        if entries[one_past_oldest_index].age_days()-this_age > periods[period_index]:
+            #print("    that's past age limit")
+            oldest_index = one_past_oldest_index - 1
+            break
+    else:
+        #print("    ran to end!")
+        oldest_index = len(entries)
+
+    if oldest_index == index:
+        #print("   nothing found, going to next iteration")
+        index = index + 1
+    else:
+        #print(f"found index {index} oldest_index {oldest_index} period_index {period_index} period {periods[period_index]}")
+        # for each range, delete all but the oldest
+        # and the start the next iteration there
+        for delete_index in range(index+1, oldest_index):
+            #print(f" --> delete index {delete_index} age={entries[delete_index].age_days()}")
+            entries[delete_index].delete_this = True
+        index = oldest_index
+    period_index = period_index + 1
+
+print("#entries to delete")
+for entry in entries:
+    if entry.delete_this:
+        print(f"#{entry}")
+        print(f"mv {entry.filename} _")
+
+print("#all done")
+
